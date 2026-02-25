@@ -169,7 +169,7 @@ public class SecureQrController : ControllerBase
         {
             LogScan(token, null, "UNKNOWN");
             _db.SaveChanges();
-            return Page("❌ Invalid QR", "This QR code is not recognised by the system. It may be tampered or not issued by the university.", token,
+            return Page("⚠️ Invalid QR", "This QR code is not recognised by the system. It may be tampered or not issued by the university.", token,
                 "Ask your lecturer for the official QR and try again.");
         }
 
@@ -178,7 +178,7 @@ public class SecureQrController : ControllerBase
         {
             LogScan(token, rec.SessionId, "UNKNOWN_SESSION");
             _db.SaveChanges();
-            return Page("❌ Invalid QR", "This QR code is linked to an unknown session. It may be tampered.", token);
+            return Page("⚠️ Invalid QR", "This QR code is linked to an unknown session. It may be tampered.", token);
         }
 
         if (now < session.ValidFromUtc || now > session.ValidToUtc)
@@ -186,7 +186,7 @@ public class SecureQrController : ControllerBase
             _db.SaveChanges();
             return RedirectOrPage(
                 session.OutsideWindowRedirectUrl,
-                () => Page("🚫 Outside attendance window",
+                () => Page("⛔ Outside attendance window",
                     $"This QR is only valid between {session.ValidFromUtc:u} and {session.ValidToUtc:u} (UTC).", token,
                     "If you're early/late, wait for the lecturer to open the attendance window.")
             );
@@ -197,7 +197,7 @@ public class SecureQrController : ControllerBase
             _db.SaveChanges();
             return RedirectOrPage(
                 session.ExpiredRedirectUrl,
-                () => Page("⏰ QR expired",
+                () => Page("🕛 QR expired",
                     $"This QR token has expired. Please rescan the latest QR shown by the lecturer.", token,
                     "Dynamic QR codes rotate to prevent screenshot reuse.")
             );

@@ -13,8 +13,9 @@ builder.Services.AddControllers();
 //Database
 var dbPath = Path.Combine(builder.Environment.ContentRootPath, "secureqr.db");
 
+// Database (Azure SQL)
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlite($"Data Source={dbPath}"));
+    options.UseSqlServer(builder.Configuration.GetConnectionString("Default")));
 
 // Swagger
 builder.Services.AddEndpointsApiExplorer();
@@ -86,11 +87,6 @@ using (var scope = app.Services.CreateScope())
     db.Database.Migrate();
 }
 
-using (var scope = app.Services.CreateScope())
-{
-    var db = scope.ServiceProvider.GetRequiredService<ictproject.Data.AppDbContext>();
-    db.Database.Migrate();
-}
 
 // Swagger UI
 if (app.Environment.IsDevelopment())
