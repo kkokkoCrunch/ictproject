@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Cryptography;
+using System.Text;
 using System.Security.Claims;
 using System.Linq;
 using ictproject.Data;
@@ -12,16 +13,20 @@ namespace ictproject.Controllers;
 [ApiController]
 public class SecureQrController : ControllerBase
 {
-    // Swapped the private static lines to DB
+    private static string ComputeHmac(string key, string data)
+    {
+        var keyBytes = Encoding.UTF8.GetBytes(key);
+        var dataBytes = Encoding.UTF8.GetBytes(data);
 
+        using var hmac = new HMACSHA256(keyBytes);
+        var hash = hmac.ComputeHash(dataBytes);
 
-    /* For reference if yall want the lines for MVP: in-memory stores, here it is 
-    private static readonly ConcurrentDictionary<Guid, Session> Sessions = new();
-    private static readonly ConcurrentDictionary<string, TokenRecord> Tokens = new();
-    private static readonly ConcurrentDictionary<Guid, ConcurrentDictionary<string, AttendanceRecord>> AttendanceBySession = new();
-    private static readonly ConcurrentBag<ScanEvent> ScanEvents = new();
-    private static readonly ConcurrentBag<SecurityIncident> SecurityIncidents = new();
-    */
+        return Convert.ToBase64String(hash)
+            .TrimEnd('=')
+            .Replace('+', '-')
+            .Replace('/', '_');
+    }
+
     private readonly AppDbContext _db;
 
     public SecureQrController(AppDbContext db)
@@ -78,7 +83,12 @@ public class SecureQrController : ControllerBase
         _db.TokenRecords.Add(rec);
         _db.SaveChanges();
 
-        var qrUrl = $"{Request.Scheme}://{Request.Host}/a/{token}";
+        var hmacKey = HttpContext.RequestServices
+            .GetRequiredService<IConfiguration>()["Hmac:Key"];
+
+        var sig = ComputeHmac(hmacKey!, token);
+
+        var qrUrl = $"{Request.Scheme}://{Request.Host}/a/{token}?sig={sig}";
 
         return Ok(new
         {
@@ -90,7 +100,7 @@ public class SecureQrController : ControllerBase
 
     // 3) Public validate endpoint (normal QR scanners open this URL)
     [HttpGet("a/{token}")]
-    public IActionResult Validate([FromRoute] string token)
+    public IActionResult Validate([FromRoute] string token, [FromQuery] string? sig)
     {
         var now = DateTime.UtcNow;
 
@@ -99,59 +109,59 @@ public class SecureQrController : ControllerBase
             var openInAppLink = $"ictproject://scan?token={Uri.EscapeDataString(tokenValue)}";
 
             var html = $@"
-    <!doctype html>
-    <html lang=""en"">
-        <head>
-            <meta charset=""utf-8"" />
-            <meta name=""viewport"" content=""width=device-width, initial-scale=1"" />
-            <title>{title}</title>
-                <style>
-                    body {{ font-family: system-ui, Arial, sans-serif; margin: 0; padding: 0; background: #0b0f19; color: #e8eefc; }}
-                    .wrap {{ max-width: 720px; margin: 0 auto; padding: 28px; }}
-                    .card {{ background: #111827; border: 1px solid #22304a; border-radius: 16px; padding: 20px; box-shadow: 0 10px 30px rgba(0,0,0,.35); }}
-                    .title {{ font-size: 22px; font-weight: 700; margin: 0 0 8px; }}
-                    .msg {{ font-size: 16px; line-height: 1.5; margin: 0 0 14px; opacity: .95; }}
-                    .hint {{ font-size: 13px; opacity: .75; margin-top: 10px; }}
-                    .btns {{ display: flex; gap: 10px; margin-top: 18px; flex-wrap: wrap; }}
-                    a.btn {{ text-decoration: none; padding: 12px 14px; border-radius: 12px; display: inline-block; font-weight: 650; }}
-                    .primary {{ background: #3b82f6; color: white; }}
-                    .secondary {{ background: #1f2937; color: #e8eefc; border: 1px solid #334155; }}
-                    code {{ background: rgba(255,255,255,.08); padding: 2px 6px; border-radius: 8px; }}
-                </style>
-        </head>
-        <body>
-            <div class=""wrap"">
-                <div class=""card"">
-                    <p class=""title"">{title}</p>
-                    <p class=""msg"">{message}</p>
+                <!doctype html>
+                <html lang=""en"">
+                <head>
+                    <meta charset=""utf-8"" />
+                    <meta name=""viewport"" content=""width=device-width, initial-scale=1"" />
+                    <title>{title}</title>
+                    <style>
+                        body {{ font-family: system-ui, Arial, sans-serif; margin: 0; padding: 0; background: #0b0f19; color: #e8eefc; }}
+                        .wrap {{ max-width: 720px; margin: 0 auto; padding: 28px; }}
+                        .card {{ background: #111827; border: 1px solid #22304a; border-radius: 16px; padding: 20px; box-shadow: 0 10px 30px rgba(0,0,0,.35); }}
+                        .title {{ font-size: 22px; font-weight: 700; margin: 0 0 8px; }}
+                        .msg {{ font-size: 16px; line-height: 1.5; margin: 0 0 14px; opacity: .95; }}
+                        .hint {{ font-size: 13px; opacity: .75; margin-top: 10px; }}
+                        .btns {{ display: flex; gap: 10px; margin-top: 18px; flex-wrap: wrap; }}
+                        a.btn {{ text-decoration: none; padding: 12px 14px; border-radius: 12px; display: inline-block; font-weight: 650; }}
+                        .primary {{ background: #3b82f6; color: white; }}
+                        .secondary {{ background: #1f2937; color: #e8eefc; border: 1px solid #334155; }}
+                        code {{ background: rgba(255,255,255,.08); padding: 2px 6px; border-radius: 8px; }}
+                    </style>
+                </head>
+                <body>
+                    <div class=""wrap"">
+                        <div class=""card"">
+                            <p class=""title"">{title}</p>
+                            <p class=""msg"">{message}</p>
 
-                <div class=""btns"">
-                    <a class=""btn primary"" href=""{openInAppLink}"">Open in App</a>
+                            <div class=""btns"">
+                                <a class=""btn primary"" href=""{openInAppLink}"">Open in App</a>
 
-                    <a class=""btn secondary"" href=""#""
-                        onclick=""navigator.clipboard.writeText('{tokenValue}'); alert('Token copied'); return false;"">
-                        Copy Token
-                    </a>
+                                <a class=""btn secondary"" href=""#""
+                                    onclick=""navigator.clipboard.writeText('{tokenValue}'); alert('Token copied'); return false;"">
+                                    Copy Token
+                                </a>
 
-                    <a class=""btn secondary"" href=""#""
-                        onclick=""fetch('/api/security/report', {{
-                        method: 'POST',
-                        headers: {{'Content-Type':'application/json'}},
-                        body: JSON.stringify({{ token: '{tokenValue}', reason: 'MANUAL_REPORT' }})
-                        }}).then(() => alert('Incident reported')); return false;"">
-                        Report Suspicious QR
-                    </a>
-                </div>
+                                <a class=""btn secondary"" href=""#""
+                                    onclick=""fetch('/api/security/report', {{
+                                    method: 'POST',
+                                    headers: {{'Content-Type':'application/json'}},
+                                    body: JSON.stringify({{ token: '{tokenValue}', reason: 'MANUAL_REPORT' }})
+                                    }}).then(() => alert('Incident reported')); return false;"">
+                                    Report Suspicious QR
+                                </a>
+                             </div>
 
-                <p class=""hint"">
-                    Token: <code>{tokenValue}</code>
-                </p>
+                            <p class=""hint"">
+                                Token: <code>{tokenValue}</code>
+                            </p>
 
-                    {(hint is null ? "" : $@"<p class=""hint"">{hint}</p>")}
-                </div>
-            </div>
-        </body>
-    </html>";
+                        {(hint is null ? "" : $@"<p class=""hint"">{hint}</p>")}
+                        </div>
+                    </div>
+                </body>
+                </html>";
 
             return Content(html, "text/html");
         }
@@ -164,12 +174,44 @@ public class SecureQrController : ControllerBase
             return fallbackPage();
         }
 
+        var hmacKey = HttpContext.RequestServices
+            .GetRequiredService<IConfiguration>()["Hmac:Key"];
+
+        if (string.IsNullOrEmpty(sig))
+        {
+            LogScan(token, null, "INVALID_SIGNATURE");
+            _db.SaveChanges();
+
+            return Page("Invalid QR",
+                "This QR code is missing its security signature.",
+                token,
+                "Please rescan the official QR.");
+        }
+
+        var expectedSig = ComputeHmac(hmacKey!, token);
+
+        if (!CryptographicOperations.FixedTimeEquals(
+            Encoding.UTF8.GetBytes(sig),
+            Encoding.UTF8.GetBytes(expectedSig)))
+        {
+            LogScan(token, null, "INVALID_SIGNATURE");
+            _db.SaveChanges();
+
+            return Page("Invalid QR",
+                "The QR code signature is invalid.",
+                token,
+                "The QR may have been modified or corrupted.");
+        }
+
         var rec = _db.TokenRecords.FirstOrDefault(t => t.Token == token);
         if (rec is null)
         {
             LogScan(token, null, "UNKNOWN");
             _db.SaveChanges();
-            return Page("⚠️ Invalid QR", "This QR code is not recognised by the system. It may be tampered or not issued by the university.", token,
+
+            return Page("⚠️ Invalid QR",
+                "This QR code is not recognised by the system. It may be tampered or not issued by the university.",
+                token,
                 "Ask your lecturer for the official QR and try again.");
         }
 
@@ -178,16 +220,21 @@ public class SecureQrController : ControllerBase
         {
             LogScan(token, rec.SessionId, "UNKNOWN_SESSION");
             _db.SaveChanges();
-            return Page("⚠️ Invalid QR", "This QR code is linked to an unknown session. It may be tampered.", token);
+
+            return Page("⚠️ Invalid QR",
+                "This QR code is linked to an unknown session. It may be tampered.",
+                token);
         }
 
         if (now < session.ValidFromUtc || now > session.ValidToUtc)
         {
             _db.SaveChanges();
+
             return RedirectOrPage(
                 session.OutsideWindowRedirectUrl,
                 () => Page("⛔ Outside attendance window",
-                    $"This QR is only valid between {session.ValidFromUtc:u} and {session.ValidToUtc:u} (UTC).", token,
+                    $"This QR is only valid between {session.ValidFromUtc:u} and {session.ValidToUtc:u} (UTC).",
+                    token,
                     "If you're early/late, wait for the lecturer to open the attendance window.")
             );
         }
@@ -195,20 +242,24 @@ public class SecureQrController : ControllerBase
         if (now > rec.ExpiresAtUtc)
         {
             _db.SaveChanges();
+
             return RedirectOrPage(
                 session.ExpiredRedirectUrl,
                 () => Page("🕛 QR expired",
-                    $"This QR token has expired. Please rescan the latest QR shown by the lecturer.", token,
+                    "This QR token has expired. Please rescan the latest QR shown by the lecturer.",
+                    token,
                     "Dynamic QR codes rotate to prevent screenshot reuse.")
             );
         }
 
         LogScan(token, session.Id, "VALID");
         _db.SaveChanges();
+
         return RedirectOrPage(
             session.SuccessRedirectUrl,
             () => Page("✅ QR valid",
-                $"This QR is valid for: {session.Name}. Open the app to complete check-in.", token)
+                $"This QR is valid for: {session.Name}. Open the app to complete check-in.",
+                token)
         );
     }
 
@@ -216,7 +267,7 @@ public class SecureQrController : ControllerBase
 
     public record CheckInRequest(string Token);
 
-    [Authorize(Roles = "Student")]
+    [Authorize(Roles = "Student,Admin")]
     [HttpPost("api/attendance/checkin")]
     public IActionResult CheckIn([FromBody] CheckInRequest req)
     {
