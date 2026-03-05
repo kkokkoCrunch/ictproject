@@ -10,6 +10,17 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Controllers
 builder.Services.AddControllers();
+//Flutter Login
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowFlutter",
+        policy =>
+        {
+            policy.AllowAnyOrigin()
+                  .AllowAnyHeader()
+                  .AllowAnyMethod();
+        });
+});
 //Database
 var dbPath = Path.Combine(builder.Environment.ContentRootPath, "secureqr.db");
 
@@ -96,9 +107,10 @@ if (app.Environment.IsDevelopment() || app.Environment.IsProduction())
 }
 
 app.UseHttpsRedirection();
-
+app.UseCors("AllowFlutter");
 app.UseAuthentication();
 app.UseAuthorization();
+
 
 app.MapControllers();
 
