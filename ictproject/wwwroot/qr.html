@@ -1,0 +1,79 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <title>Secure QR Attendance</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <style>
+        body{
+            font-family: Arial;
+            background:#0f172a;
+            color:white;
+            text-align:center;
+            padding:40px;
+        }
+
+        .card{
+            background:#1e293b;
+            padding:30px;
+            border-radius:12px;
+            display:inline-block;
+        }
+
+        img{
+            margin-top:20px;
+        }
+
+        button{
+            margin-top:20px;
+            padding:12px 18px;
+            border:none;
+            border-radius:8px;
+            background:#3b82f6;
+            color:white;
+            font-size:16px;
+            cursor:pointer;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="card">
+
+<h2>Secure QR Attendance</h2>
+
+<div id="qr"></div>
+
+<p id="token"></p>
+
+<button onclick="openApp()">Open in App</button>
+
+</div>
+
+<script>
+
+const params = new URLSearchParams(window.location.search);
+const token = params.get("token");
+
+if(token)
+{
+    document.getElementById("token").innerText = "Token: " + token;
+
+    const qrUrl =
+        "https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=" +
+        encodeURIComponent(window.location.href);
+
+    document.getElementById("qr").innerHTML =
+        `<img src="${qrUrl}" />`;
+}
+
+function openApp()
+{
+    window.location.href = "ictproject://scan?token=" + token;
+}
+
+</script>
+
+</body>
+</html>

@@ -1,5 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using ictproject.Controllers;
+using ictproject.Models;
 
 namespace ictproject.Data;
 
@@ -12,6 +13,7 @@ public class AppDbContext : DbContext
     public DbSet<SecureQrController.AttendanceRecord> AttendanceRecords => Set<SecureQrController.AttendanceRecord>();
     public DbSet<SecureQrController.SecurityIncident> SecurityIncidents => Set<SecureQrController.SecurityIncident>();
     public DbSet<SecureQrController.ScanEvent> ScanEvents => Set<SecureQrController.ScanEvent>();
+    public DbSet<User> Users => Set<User>();
 
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)

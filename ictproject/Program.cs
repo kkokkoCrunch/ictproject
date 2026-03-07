@@ -1,10 +1,12 @@
+using ictproject.Data;
+using ictproject.Models;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
-using System.Text;
-using Microsoft.EntityFrameworkCore;
-using ictproject.Data;
 using System.IO;
+using System.Text;
+using BCrypt.Net;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -94,8 +96,23 @@ builder.Services.AddAuthorization();
 var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
-    var db = scope.ServiceProvider.GetRequiredService<ictproject.Data.AppDbContext>();
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
     db.Database.Migrate();
+
+    // create first admin if database empty
+    if (!db.Users.Any())
+    {
+        var admin = new User
+        {
+            Username = "admin",
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword("admin123"),
+            Role = "Admin"
+        };
+
+        db.Users.Add(admin);
+        db.SaveChanges();
+    }
 }
 
 
@@ -107,6 +124,7 @@ if (app.Environment.IsDevelopment() || app.Environment.IsProduction())
 }
 
 app.UseHttpsRedirection();
+app.UseStaticFiles();
 app.UseCors("AllowFlutter");
 app.UseAuthentication();
 app.UseAuthorization();

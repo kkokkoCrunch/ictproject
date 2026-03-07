@@ -29,6 +29,16 @@ public class SecureQrController : ControllerBase
 
     private readonly AppDbContext _db;
 
+    private const double MaxDistanceMeters = 50;
+
+    private static readonly (double Lat, double Lon)[] AllowedLocations =
+    {
+    (1.2966, 103.8526), // 188720
+    (1.3283, 103.8609), // 320008
+    (1.3508, 103.9340), // 828689
+    (1.3702, 103.9545)  // 510460
+};
+
     public SecureQrController(AppDbContext db)
     {
         _db = db;
@@ -39,6 +49,8 @@ public class SecureQrController : ControllerBase
     [HttpPost("api/sessions")]
     public IActionResult CreateSession([FromBody] CreateSessionRequest req)
     {
+        if (req.ValidToUtc <= req.ValidFromUtc)
+            return BadRequest(new { error = "Invalid session time window" });
         var session = new Session
         {
             Id = Guid.NewGuid(),
@@ -65,8 +77,18 @@ public class SecureQrController : ControllerBase
     public IActionResult Rotate([FromRoute] Guid sessionId)
     {
         var session = _db.Sessions.FirstOrDefault(s => s.Id == sessionId);
+
         if (session is null)
             return NotFound(new { error = "Session not found" });
+
+        // NEW: stop QR rotation if session expired
+        if (DateTime.UtcNow > session.ValidToUtc)
+            return BadRequest(new { error = "Session expired" });
+
+        var oldTokens = _db.TokenRecords
+            .Where(t => t.ExpiresAtUtc < DateTime.UtcNow.AddMinutes(-5));
+
+        _db.TokenRecords.RemoveRange(oldTokens);
 
         var token = GenerateTokenBase64Url(32);
         var now = DateTime.UtcNow;
@@ -88,7 +110,7 @@ public class SecureQrController : ControllerBase
 
         var sig = ComputeHmac(hmacKey!, token);
 
-        var qrUrl = $"{Request.Scheme}://{Request.Host}/a/{token}?sig={sig}";
+        var qrUrl = $"{Request.Scheme}://{Request.Host}/qr.html?token={token}&sig={sig}";
 
         return Ok(new
         {
@@ -216,6 +238,7 @@ public class SecureQrController : ControllerBase
         }
 
         var session = _db.Sessions.FirstOrDefault(s => s.Id == rec.SessionId);
+
         if (session is null)
         {
             LogScan(token, rec.SessionId, "UNKNOWN_SESSION");
@@ -224,6 +247,11 @@ public class SecureQrController : ControllerBase
             return Page("⚠️ Invalid QR",
                 "This QR code is linked to an unknown session. It may be tampered.",
                 token);
+        }
+
+        if (DateTime.UtcNow > session.ValidToUtc)
+        {
+            return BadRequest(new { error = "Session expired" });
         }
 
         if (now < session.ValidFromUtc || now > session.ValidToUtc)
@@ -265,7 +293,11 @@ public class SecureQrController : ControllerBase
 
     //check in requests
 
-    public record CheckInRequest(string Token);
+    public record CheckInRequest(
+        string Token,
+        double Latitude,
+        double Longitude
+    );
 
     [Authorize(Roles = "Student,Admin")]
     [HttpPost("api/attendance/checkin")]
@@ -279,6 +311,27 @@ public class SecureQrController : ControllerBase
 
         if (string.IsNullOrWhiteSpace(req.Token))
             return BadRequest(new { result = "BAD_REQUEST", reason = "Token is required" });
+
+        if (req.Latitude == 0 || req.Longitude == 0)
+        {
+            return BadRequest(new { result = "LOCATION_REQUIRED" });
+        }
+
+        bool insideAllowedArea = AllowedLocations.Any(loc =>
+            GetDistanceMeters(req.Latitude, req.Longitude, loc.Lat, loc.Lon) <= MaxDistanceMeters
+        );
+
+        if (!insideAllowedArea)
+        {
+            LogScan(req.Token, null, "CHECKIN_OUTSIDE_LOCATION", studentId);
+            _db.SaveChanges();
+
+            return BadRequest(new
+            {
+                result = "OUTSIDE_LOCATION",
+                reason = "You are not within the allowed campus area"
+            });
+        }
 
         var rec = _db.TokenRecords.FirstOrDefault(t => t.Token == req.Token);
         if (rec is null)
@@ -345,6 +398,8 @@ public class SecureQrController : ControllerBase
     [HttpPost("api/security/report")]
     public IActionResult ReportIncident([FromBody] ReportIncidentRequest req)
     {
+        if (req.Reason.Length > 100)
+            return BadRequest();
         Guid? sessionId = null;
 
         var rec = _db.TokenRecords.FirstOrDefault(t => t.Token == req.Token);
@@ -495,6 +550,32 @@ public class SecureQrController : ControllerBase
         .ToList());
     }
 
+    private static double GetDistanceMeters(
+    double lat1,
+    double lon1,
+    double lat2,
+    double lon2)
+    {
+        const double R = 6371000;
 
+        var dLat = DegreesToRadians(lat2 - lat1);
+        var dLon = DegreesToRadians(lon2 - lon1);
+
+        var a =
+            Math.Sin(dLat / 2) * Math.Sin(dLat / 2) +
+            Math.Cos(DegreesToRadians(lat1)) *
+            Math.Cos(DegreesToRadians(lat2)) *
+            Math.Sin(dLon / 2) *
+            Math.Sin(dLon / 2);
+
+        var c = 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
+
+        return R * c;
+    }
+
+    private static double DegreesToRadians(double deg)
+    {
+        return deg * (Math.PI / 180);
+    }
 }
 
