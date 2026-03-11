@@ -29,15 +29,12 @@ public class SecureQrController : ControllerBase
 
     private readonly AppDbContext _db;
 
-    private const double MaxDistanceMeters = 50;
+    private const double MaxDistanceMeters = 300;
 
     private static readonly (double Lat, double Lon)[] AllowedLocations =
     {
-    (1.2966, 103.8526), // 188720
-    (1.3283, 103.8609), // 320008
-    (1.3508, 103.9340), // 828689
-    (1.3702, 103.9545)  // 510460
-};
+        (1.3641, 103.9626)
+    };
 
     public SecureQrController(AppDbContext db)
     {
@@ -321,6 +318,14 @@ public class SecureQrController : ControllerBase
             GetDistanceMeters(req.Latitude, req.Longitude, loc.Lat, loc.Lon) <= MaxDistanceMeters
         );
 
+        foreach (var loc in AllowedLocations)
+        {
+            var distance = GetDistanceMeters(req.Latitude, req.Longitude, loc.Lat, loc.Lon);
+            Console.WriteLine($"Student: {req.Latitude}, {req.Longitude}");
+            Console.WriteLine($"Allowed: {loc.Lat}, {loc.Lon}");
+            Console.WriteLine($"Distance: {distance} m");
+        }
+
         if (!insideAllowedArea)
         {
             LogScan(req.Token, null, "CHECKIN_OUTSIDE_LOCATION", studentId);
@@ -541,13 +546,14 @@ public class SecureQrController : ControllerBase
     }
 
     [Authorize(Roles = "Lecturer,Admin")]
-    [HttpGet("api/scans")]
-    public IActionResult GetScans()
+    [HttpGet("api/sessions/{sessionId:guid}/scans")]
+    public IActionResult GetSessionScans([FromRoute] Guid sessionId)
     {
         return Ok(_db.ScanEvents
-        .OrderByDescending(x => x.ScannedAtUtc)
-        .Take(200)
-        .ToList());
+            .Where(x => x.SessionId == sessionId)
+            .OrderByDescending(x => x.ScannedAtUtc)
+            .Take(200)
+            .ToList());
     }
 
     private static double GetDistanceMeters(
