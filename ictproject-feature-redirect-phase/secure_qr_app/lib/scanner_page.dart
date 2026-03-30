@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:qr_code_scanner_plus/qr_code_scanner_plus.dart';
 import 'package:geolocator/geolocator.dart';
+import 'scan_result_page.dart';
 
 const String apiBase =
     "https://secureqr-api-bdhnbpffhyctejfc.eastasia-01.azurewebsites.net";
@@ -38,6 +39,11 @@ class _ScannerPageState extends State<ScannerPage>
     scanAnimation = Tween<double>(begin: 0, end: 250).animate(scanController);
   }
 
+  void resetScanner() {
+    scanned = false;
+    controller?.resumeCamera();
+  }
+
   void onQRViewCreated(QRViewController controller) {
     this.controller = controller;
 
@@ -46,12 +52,22 @@ class _ScannerPageState extends State<ScannerPage>
       scanned = true;
 
       final code = scanData.code;
-      if (code == null) return;
+      if (code == null || code.isEmpty) {
+        resetScanner();
+        return;
+      }
 
-      Uri uri = Uri.parse(code);
+      final uri = Uri.tryParse(code);
+      if (uri == null || uri.pathSegments.isEmpty) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text("Invalid QR format")));
+        resetScanner();
+        return;
+      }
 
-      String token = uri.pathSegments.last;
-      String? sig = uri.queryParameters["sig"];
+      final token = uri.pathSegments.last;
+      final String? sig = uri.queryParameters["sig"];
 
       controller.pauseCamera();
 
@@ -71,6 +87,7 @@ class _ScannerPageState extends State<ScannerPage>
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("Location permission required")),
         );
+        resetScanner();
         return;
       }
 
@@ -78,6 +95,9 @@ class _ScannerPageState extends State<ScannerPage>
       Position position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
       );
+
+      print("LAT: ${position.latitude}");
+      print("LNG: ${position.longitude}");
 
       final response = await http.post(
         url,
@@ -87,6 +107,7 @@ class _ScannerPageState extends State<ScannerPage>
         },
         body: jsonEncode({
           "token": token,
+          "sig": sig,
           "latitude": position.latitude,
           "longitude": position.longitude,
         }),
@@ -118,30 +139,42 @@ class _ScannerPageState extends State<ScannerPage>
           color = Colors.red;
           break;
 
+        case "OUTSIDE_WINDOW":
+          message = "⏰ This QR is outside the attendance time window";
+          color = Colors.deepOrange;
+          break;
+
+        case "INVALID_QR":
+          message = "❌ Invalid QR";
+          color = Colors.red;
+          break;
+
         default:
           message = "❌ Invalid QR";
           color = Colors.red;
       }
 
-      showDialog(
-        context: context,
-        builder: (_) => AlertDialog(
-          title: const Text("Attendance Status"),
-          content: Text(message, style: TextStyle(fontSize: 18, color: color)),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-                scanned = false;
-                controller?.resumeCamera();
-              },
-              child: const Text("OK"),
-            ),
-          ],
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ScanResultPage(
+            jwt: widget.jwt,
+            token: token,
+            result: data["result"] ?? "UNKNOWN",
+            message: message,
+          ),
         ),
-      );
+      ).then((_) {
+        resetScanner();
+      });
     } catch (e) {
       print(e);
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("Failed to scan QR")));
+
+      resetScanner();
     }
   }
 

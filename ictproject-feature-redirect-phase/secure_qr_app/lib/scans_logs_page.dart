@@ -7,8 +7,9 @@ const String apiBase =
 
 class ScanLogsPage extends StatefulWidget {
   final String jwt;
+  final String sessionId;
 
-  const ScanLogsPage({super.key, required this.jwt});
+  const ScanLogsPage({super.key, required this.jwt, required this.sessionId});
 
   @override
   State<ScanLogsPage> createState() => _ScanLogsPageState();
@@ -19,7 +20,7 @@ class _ScanLogsPageState extends State<ScanLogsPage> {
   bool loading = true;
 
   Future<void> loadLogs() async {
-    final url = Uri.parse("$apiBase/api/scans");
+    final url = Uri.parse("$apiBase/api/sessions/${widget.sessionId}/scans");
 
     final response = await http.get(
       url,
@@ -49,44 +50,61 @@ class _ScanLogsPageState extends State<ScanLogsPage> {
 
       body: loading
           ? const Center(child: CircularProgressIndicator())
+          : logs.isEmpty
+          ? const Center(
+              child: Text(
+                "No scans yet",
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500),
+              ),
+            )
           : ListView.builder(
               itemCount: logs.length,
               itemBuilder: (context, index) {
                 final item = logs[index];
 
                 String result = item["result"] ?? "Unknown";
-                bool suspicious = result == "DUPLICATE";
+                bool suspicious =
+                    result == "DUPLICATE" ||
+                    result == "CHECKIN_DUP" ||
+                    result == "INVALID_SIGNATURE" ||
+                    result == "CHECKIN_INVALID_SIGNATURE";
 
                 Color color = Colors.grey;
                 IconData icon = Icons.qr_code;
 
-                if (result == "VALID") {
+                if (result == "VALID" || result == "CHECKIN_OK") {
                   color = Colors.green;
                   icon = Icons.check_circle;
                 }
 
-                if (result == "DUPLICATE") {
+                if (result == "DUPLICATE" || result == "CHECKIN_DUP") {
                   color = Colors.orange;
                   icon = Icons.warning;
                 }
 
-                if (result == "EXPIRED") {
+                if (result == "EXPIRED" || result == "CHECKIN_EXPIRED") {
                   color = Colors.red;
                   icon = Icons.error;
                 }
 
+                if (result == "INVALID_SIGNATURE" ||
+                    result == "CHECKIN_INVALID_SIGNATURE" ||
+                    result == "UNKNOWN" ||
+                    result == "CHECKIN_UNKNOWN") {
+                  color = Colors.red;
+                  icon = Icons.cancel;
+                }
+
                 return ListTile(
                   leading: Icon(icon, color: color),
-
                   title: Text(
                     result,
                     style: TextStyle(fontWeight: FontWeight.bold, color: color),
                   ),
-
                   subtitle: Text(
                     suspicious
-                        ? "Possible replay attack • ${item["studentId"] ?? "Unknown"} • ${item["timestamp"] ?? ""}"
-                        : "${item["studentId"] ?? "Unknown"} • ${item["timestamp"] ?? ""}",
+                        ? "Possible suspicious scan • ${item["studentId"] ?? "Unknown"} • ${item["scannedAtUtc"] ?? item["timestamp"] ?? ""}"
+                        : "${item["studentId"] ?? "Unknown"} • ${item["scannedAtUtc"] ?? item["timestamp"] ?? ""}",
                   ),
                 );
               },

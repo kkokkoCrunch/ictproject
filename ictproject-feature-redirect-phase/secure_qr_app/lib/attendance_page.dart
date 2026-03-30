@@ -41,18 +41,25 @@ class _AttendancePageState extends State<AttendancePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text("Attendance List")),
-      body: ListView.builder(
-        itemCount: attendance.length,
-        itemBuilder: (context, index) {
-          final item = attendance[index];
+      body: attendance.isEmpty
+          ? const Center(
+              child: Text(
+                "No attendance records yet",
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500),
+              ),
+            )
+          : ListView.builder(
+              itemCount: attendance.length,
+              itemBuilder: (context, index) {
+                final item = attendance[index];
 
-          return ListTile(
-            leading: const Icon(Icons.person),
-            title: Text(item["studentId"] ?? "Unknown"),
-            subtitle: Text(item["checkedInAtUtc"] ?? ""),
-          );
-        },
-      ),
+                return ListTile(
+                  leading: const Icon(Icons.person),
+                  title: Text(item["studentId"] ?? "Unknown"),
+                  subtitle: Text(item["checkedInAtUtc"] ?? ""),
+                );
+              },
+            ),
     );
   }
 }

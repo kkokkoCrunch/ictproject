@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'scanner_page.dart';
+import 'login_page.dart';
 
 class StudentPage extends StatelessWidget {
   final String jwt;
@@ -9,7 +10,21 @@ class StudentPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Student Dashboard")),
+      appBar: AppBar(
+        title: const Text("Student Dashboard"),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout),
+            onPressed: () {
+              Navigator.pushAndRemoveUntil(
+                context,
+                MaterialPageRoute(builder: (_) => const LoginPage()),
+                (route) => false,
+              );
+            },
+          ),
+        ],
+      ),
 
       body: Padding(
         padding: const EdgeInsets.all(20),

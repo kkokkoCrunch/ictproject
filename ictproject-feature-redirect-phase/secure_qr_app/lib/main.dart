@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:app_links/app_links.dart';
+import 'dart:async';
+
 import 'login_page.dart';
-import 'package:uni_links/uni_links.dart';
 
 void main() {
   runApp(const SecureQrApp());
@@ -14,16 +16,16 @@ class SecureQrApp extends StatefulWidget {
 }
 
 class _SecureQrAppState extends State<SecureQrApp> {
+  late final AppLinks _appLinks;
+  StreamSubscription<Uri>? _linkSub;
+
   @override
   void initState() {
     super.initState();
-    initDeepLink();
-  }
 
-  void initDeepLink() async {
-    try {
-      final uri = await getInitialUri();
+    _appLinks = AppLinks();
 
+    _linkSub = _appLinks.uriLinkStream.listen((uri) {
       if (uri != null) {
         final token = uri.queryParameters['token'];
 
@@ -31,9 +33,13 @@ class _SecureQrAppState extends State<SecureQrApp> {
           print("Token received: $token");
         }
       }
-    } catch (e) {
-      print("Deep link error: $e");
-    }
+    });
+  }
+
+  @override
+  void dispose() {
+    _linkSub?.cancel();
+    super.dispose();
   }
 
   @override

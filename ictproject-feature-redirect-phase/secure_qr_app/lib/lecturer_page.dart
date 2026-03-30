@@ -6,6 +6,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 
 import 'attendance_page.dart';
 import 'scans_logs_page.dart';
+import 'login_page.dart';
 
 const String apiBase =
     "https://secureqr-api-bdhnbpffhyctejfc.eastasia-01.azurewebsites.net";
@@ -174,7 +175,21 @@ class _LecturerPageState extends State<LecturerPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Lecturer Dashboard")),
+      appBar: AppBar(
+        title: const Text("Lecturer Dashboard"),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout),
+            onPressed: () {
+              Navigator.pushAndRemoveUntil(
+                context,
+                MaterialPageRoute(builder: (_) => const LoginPage()),
+                (route) => false,
+              );
+            },
+          ),
+        ],
+      ),
 
       body: Padding(
         padding: const EdgeInsets.all(20),
@@ -304,10 +319,13 @@ class _LecturerPageState extends State<LecturerPage> {
                 const SizedBox(width: 10),
 
                 dashboardButton("Scan Logs", Icons.qr_code, () {
+                  if (sessionId == null) return;
+
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => ScanLogsPage(jwt: widget.jwt),
+                      builder: (_) =>
+                          ScanLogsPage(jwt: widget.jwt, sessionId: sessionId!),
                     ),
                   );
                 }),
