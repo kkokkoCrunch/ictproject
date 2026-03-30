@@ -67,8 +67,58 @@ public class SecureQrController : ControllerBase
 
         return Ok(new { sessionId = session.Id });
     }
+    //2a) Rotate long-lived token(static QR)
+    [Authorize(Roles = "Admin")]
+    [HttpPost("api/admin/static-qr")]
+    public IActionResult CreateStaticQr([FromBody] CreateStaticQrRequest req)
+    {
+        if (string.IsNullOrWhiteSpace(req.Name))
+            return BadRequest(new { error = "Name is required" });
 
-    // 2) Rotate short-lived token (dynamic QR)
+        if (req.ValidToUtc <= req.ValidFromUtc)
+            return BadRequest(new { error = "Invalid session time window" });
+
+        var session = new Session
+        {
+            Id = Guid.NewGuid(),
+            Name = req.Name,
+            ValidFromUtc = req.ValidFromUtc,
+            ValidToUtc = req.ValidToUtc,
+            RotationSeconds = 9999999
+        };
+
+        _db.Sessions.Add(session);
+
+        var token = GenerateTokenBase64Url(32);
+
+        var rec = new TokenRecord
+        {
+            Token = token,
+            SessionId = session.Id,
+            IssuedAtUtc = DateTime.UtcNow,
+            ExpiresAtUtc = session.ValidToUtc
+        };
+
+        _db.TokenRecords.Add(rec);
+        _db.SaveChanges();
+
+        var hmacKey = HttpContext.RequestServices
+            .GetRequiredService<IConfiguration>()["Hmac:Key"];
+
+        var sig = ComputeHmac(hmacKey!, token);
+
+        var qrUrl = $"{Request.Scheme}://{Request.Host}/a/{token}?sig={sig}";
+
+        return Ok(new
+        {
+            sessionId = session.Id,
+            token,
+            qrUrl,
+            validToUtc = session.ValidToUtc
+        });
+    }
+
+    // 2b) Rotate short-lived token (dynamic QR)
     [Authorize(Roles = "Lecturer,Admin")]
     [HttpPost("api/sessions/{sessionId:guid}/rotate")]
     public IActionResult Rotate([FromRoute] Guid sessionId)
@@ -125,7 +175,7 @@ public class SecureQrController : ControllerBase
 
         ContentResult Page(string title, string message, string tokenValue, string? hint = null)
         {
-            var openInAppLink = $"ictproject://scan?token={Uri.EscapeDataString(tokenValue)}";
+            var openInAppLink = $"ictproject://scan?token={Uri.EscapeDataString(tokenValue)}&sig={Uri.EscapeDataString(sig ?? "")}";
 
             var html = $@"
                 <!doctype html>
@@ -291,9 +341,10 @@ public class SecureQrController : ControllerBase
     //check in requests
 
     public record CheckInRequest(
-        string Token,
-        double Latitude,
-        double Longitude
+    string Token,
+    string? Sig,
+    double Latitude,
+    double Longitude
     );
 
     [Authorize(Roles = "Student,Admin")]
@@ -308,6 +359,37 @@ public class SecureQrController : ControllerBase
 
         if (string.IsNullOrWhiteSpace(req.Token))
             return BadRequest(new { result = "BAD_REQUEST", reason = "Token is required" });
+
+        var hmacKey = HttpContext.RequestServices
+    .GetRequiredService<IConfiguration>()["Hmac:Key"];
+
+        if (string.IsNullOrWhiteSpace(req.Sig))
+        {
+            LogScan(req.Token, null, "CHECKIN_INVALID_SIGNATURE", studentId);
+            _db.SaveChanges();
+
+            return BadRequest(new
+            {
+                result = "INVALID_QR",
+                reason = "Missing QR signature"
+            });
+        }
+
+        var expectedSig = ComputeHmac(hmacKey!, req.Token);
+
+        if (!CryptographicOperations.FixedTimeEquals(
+            Encoding.UTF8.GetBytes(req.Sig),
+            Encoding.UTF8.GetBytes(expectedSig)))
+        {
+            LogScan(req.Token, null, "CHECKIN_INVALID_SIGNATURE", studentId);
+            _db.SaveChanges();
+
+            return BadRequest(new
+            {
+                result = "INVALID_QR",
+                reason = "Invalid QR signature"
+            });
+        }
 
         if (req.Latitude == 0 || req.Longitude == 0)
         {
@@ -473,6 +555,12 @@ public class SecureQrController : ControllerBase
         string? OutsideWindowRedirectUrl,
         string? InvalidRedirectUrl
         );
+
+    public record CreateStaticQrRequest(
+    string Name,
+    DateTime ValidFromUtc,
+    DateTime ValidToUtc
+);
 
 
 
