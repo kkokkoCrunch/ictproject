@@ -20,6 +20,7 @@ class _ScanLogsPageState extends State<ScanLogsPage> {
   bool loading = true;
 
   Future<void> loadLogs() async {
+  try {
     final url = Uri.parse("$apiBase/api/sessions/${widget.sessionId}/scans");
 
     final response = await http.get(
@@ -34,8 +35,21 @@ class _ScanLogsPageState extends State<ScanLogsPage> {
         logs = data;
         loading = false;
       });
+    } else {
+      print("Scan logs API error: ${response.statusCode}");
+
+      setState(() {
+        loading = false;
+      });
     }
+  } catch (e) {
+    print("Scan logs exception: $e");
+
+    setState(() {
+      loading = false;
+    });
   }
+}
 
   @override
   void initState() {
