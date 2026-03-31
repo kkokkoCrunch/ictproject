@@ -1,0 +1,1 @@
+ /Users/kuu431/Documents/ictproject/secure_qr_app/.dart_tool/flutter_build/c8f99587a4b2bd9016b0daee2006b79a/dart_build_result.json:  /Users/kuu431/Documents/ictproject/secure_qr_app/.dart_tool/package_config.json /Users/kuu431/Documents/ictproject/secure_qr_app/pubspec.yaml /opt/homebrew/share/flutter/bin/cache/dart-sdk/version
