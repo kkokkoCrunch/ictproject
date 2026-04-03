@@ -63,6 +63,8 @@ class ScanResultPage extends StatelessWidget {
         return Icons.cancel;
       case "OUTSIDE_WINDOW":
         return Icons.event_busy;
+      case "LOCATION_REQUIRED":
+        return Icons.location_disabled;
       default:
         return Icons.help;
     }
@@ -82,6 +84,8 @@ class ScanResultPage extends StatelessWidget {
         return Colors.red;
       case "OUTSIDE_WINDOW":
         return Colors.deepOrange;
+      case "LOCATION_REQUIRED":
+        return Colors.red;
       default:
         return Colors.grey;
     }
@@ -101,6 +105,8 @@ class ScanResultPage extends StatelessWidget {
         return "Invalid QR";
       case "OUTSIDE_WINDOW":
         return "Outside Attendance Window";
+      case "LOCATION_REQUIRED":
+        return "Location Required";
       default:
         return "Unknown Result";
     }

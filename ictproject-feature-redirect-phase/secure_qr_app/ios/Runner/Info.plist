@@ -71,5 +71,16 @@
 
 <key>NSLocationWhenInUseUsageDescription</key>
 <string>This app needs location access to verify classroom attendance.</string>
+<key>CFBundleURLTypes</key>
+<array>
+    <dict>
+        <key>CFBundleURLName</key>
+        <string>ictproject</string>
+        <key>CFBundleURLSchemes</key>
+        <array>
+            <string>ictproject</string>
+        </array>
+    </dict>
+</array>
 </dict>
 </plist>

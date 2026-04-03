@@ -10,7 +10,9 @@ const String apiBase =
     "https://secureqr-api-bdhnbpffhyctejfc.eastasia-01.azurewebsites.net";
 
 class LoginPage extends StatefulWidget {
-  const LoginPage({super.key});
+  final void Function(String jwt)? onLoginSuccess;
+
+  const LoginPage({super.key, this.onLoginSuccess});
 
   @override
   State<LoginPage> createState() => _LoginPageState();
@@ -45,6 +47,8 @@ class _LoginPageState extends State<LoginPage> {
 
       final jwt = data["accessToken"];
       final role = data["role"];
+
+      widget.onLoginSuccess?.call(jwt);
 
       if (role == "Student") {
         Navigator.pushReplacement(
