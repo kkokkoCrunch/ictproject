@@ -5,8 +5,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 import 'admin_incidents_page.dart';
 import 'login_page.dart';
 
-const String apiBase =
-    "https://secureqr-api-bdhnbpffhyctejfc.eastasia-01.azurewebsites.net";
+const String apiBase = "https://YOUR-NEW-BACKEND-URL.azurewebsites.net";
 
 class AdminPage extends StatefulWidget {
   final String jwt;
@@ -20,10 +19,15 @@ class AdminPage extends StatefulWidget {
 class _AdminPageState extends State<AdminPage> {
   final nameController = TextEditingController();
 
+  final newUsernameController = TextEditingController();
+  final newPasswordController = TextEditingController();
+  String selectedRole = "Student";
+
   String? qrUrl;
   String? token;
   String? validToUtc;
   bool loading = false;
+  bool creatingUser = false;
 
   Future<void> createStaticQr() async {
     if (nameController.text.trim().isEmpty) {
@@ -79,7 +83,7 @@ class _AdminPageState extends State<AdminPage> {
           ),
         );
       }
-    } catch (e) {
+    } catch (_) {
       if (!mounted) return;
 
       setState(() {
@@ -92,10 +96,227 @@ class _AdminPageState extends State<AdminPage> {
     }
   }
 
+  Future<void> createUser() async {
+    if (newUsernameController.text.trim().isEmpty ||
+        newPasswordController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please fill in username and password")),
+      );
+      return;
+    }
+
+    setState(() {
+      creatingUser = true;
+    });
+
+    try {
+      final response = await http.post(
+        Uri.parse("$apiBase/api/auth/register"),
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer ${widget.jwt}",
+        },
+        body: jsonEncode({
+          "username": newUsernameController.text.trim(),
+          "password": newPasswordController.text.trim(),
+          "role": selectedRole,
+        }),
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        creatingUser = false;
+      });
+
+      if (response.statusCode == 200) {
+        newUsernameController.clear();
+        newPasswordController.clear();
+
+        setState(() {
+          selectedRole = "Student";
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("User created successfully")),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Failed to create user: ${response.body}")),
+        );
+      }
+    } catch (_) {
+      if (!mounted) return;
+
+      setState(() {
+        creatingUser = false;
+      });
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("Error creating user")));
+    }
+  }
+
   @override
   void dispose() {
     nameController.dispose();
+    newUsernameController.dispose();
+    newPasswordController.dispose();
     super.dispose();
+  }
+
+  Widget buildCreateUserCard() {
+    return Card(
+      elevation: 4,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text(
+              "Create New User",
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: newUsernameController,
+              decoration: const InputDecoration(
+                labelText: "Username",
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: newPasswordController,
+              obscureText: true,
+              decoration: const InputDecoration(
+                labelText: "Password",
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 16),
+            DropdownButtonFormField<String>(
+              value: selectedRole,
+              decoration: const InputDecoration(
+                labelText: "Role",
+                border: OutlineInputBorder(),
+              ),
+              items: const [
+                DropdownMenuItem(value: "Student", child: Text("Student")),
+                DropdownMenuItem(value: "Lecturer", child: Text("Lecturer")),
+                DropdownMenuItem(value: "Admin", child: Text("Admin")),
+              ],
+              onChanged: (value) {
+                if (value != null) {
+                  setState(() {
+                    selectedRole = value;
+                  });
+                }
+              },
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: creatingUser ? null : createUser,
+                child: creatingUser
+                    ? const SizedBox(
+                        height: 22,
+                        width: 22,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text("Create User"),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget buildStaticQrCard() {
+    return Card(
+      elevation: 4,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text(
+              "Create Event Static QR",
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: nameController,
+              decoration: const InputDecoration(
+                labelText: "Event Name",
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: loading ? null : createStaticQr,
+                child: loading
+                    ? const SizedBox(
+                        height: 22,
+                        width: 22,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text("Generate Static QR"),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget buildQrResultCard() {
+    return Card(
+      elevation: 4,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            const Text(
+              "Generated Event QR",
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 16),
+            QrImageView(data: qrUrl!, size: 220),
+            const SizedBox(height: 16),
+            const Text(
+              "QR Link:",
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 6),
+            SelectableText(qrUrl!, textAlign: TextAlign.center),
+            if (token != null) ...[
+              const SizedBox(height: 16),
+              const Text(
+                "Token:",
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 6),
+              SelectableText(token!, textAlign: TextAlign.center),
+            ],
+            if (validToUtc != null) ...[
+              const SizedBox(height: 16),
+              const Text(
+                "Valid Until (UTC):",
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 6),
+              SelectableText(validToUtc!, textAlign: TextAlign.center),
+            ],
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -121,48 +342,9 @@ class _AdminPageState extends State<AdminPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Card(
-              elevation: 4,
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const Text(
-                      "Create Event Static QR",
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: nameController,
-                      decoration: const InputDecoration(
-                        labelText: "Event Name",
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: loading ? null : createStaticQr,
-                        child: loading
-                            ? const SizedBox(
-                                height: 22,
-                                width: 22,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Text("Generate Static QR"),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
+            buildCreateUserCard(),
+            const SizedBox(height: 24),
+            buildStaticQrCard(),
             const SizedBox(height: 24),
             SizedBox(
               width: double.infinity,
@@ -180,55 +362,7 @@ class _AdminPageState extends State<AdminPage> {
               ),
             ),
             const SizedBox(height: 24),
-            if (qrUrl != null) ...[
-              Card(
-                elevation: 4,
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    children: [
-                      const Text(
-                        "Generated Event QR",
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      QrImageView(data: qrUrl!, size: 220),
-                      const SizedBox(height: 16),
-                      const Text(
-                        "QR Link:",
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 6),
-                      SelectableText(qrUrl!, textAlign: TextAlign.center),
-                      if (token != null) ...[
-                        const SizedBox(height: 16),
-                        const Text(
-                          "Token:",
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                        const SizedBox(height: 6),
-                        SelectableText(token!, textAlign: TextAlign.center),
-                      ],
-                      if (validToUtc != null) ...[
-                        const SizedBox(height: 16),
-                        const Text(
-                          "Valid Until (UTC):",
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                        const SizedBox(height: 6),
-                        SelectableText(
-                          validToUtc!,
-                          textAlign: TextAlign.center,
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ),
-            ],
+            if (qrUrl != null) buildQrResultCard(),
           ],
         ),
       ),
