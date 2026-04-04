@@ -5,9 +5,7 @@ import 'package:http/http.dart' as http;
 import 'student_page.dart';
 import 'lecturer_page.dart';
 import 'admin_page.dart';
-
-const String apiBase =
-    "https://secureqr-api-bdhnbpffhyctejfc.eastasia-01.azurewebsites.net";
+import 'config.dart';
 
 class LoginPage extends StatefulWidget {
   final void Function(String jwt)? onLoginSuccess;

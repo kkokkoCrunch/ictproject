@@ -4,9 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:qr_flutter/qr_flutter.dart';
 import 'admin_incidents_page.dart';
 import 'login_page.dart';
-
-const String apiBase =
-    "https://secureqr-api-bdhnbpffhyctejfc.eastasia-01.azurewebsites.net";
+import 'config.dart';
 
 class AdminPage extends StatefulWidget {
   final String jwt;

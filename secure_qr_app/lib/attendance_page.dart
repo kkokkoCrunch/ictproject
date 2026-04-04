@@ -1,9 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-
-const String apiBase =
-    "https://secureqr-api-bdhnbpffhyctejfc.eastasia-01.azurewebsites.net";
+import 'config.dart';
 
 class AttendancePage extends StatefulWidget {
   final String jwt;

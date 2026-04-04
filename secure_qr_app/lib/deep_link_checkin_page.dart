@@ -3,9 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:geolocator/geolocator.dart';
 import 'scan_result_page.dart';
-
-const String apiBase =
-    "https://secureqr-api-bdhnbpffhyctejfc.eastasia-01.azurewebsites.net";
+import 'config.dart';
 
 class DeepLinkCheckInPage extends StatefulWidget {
   final String jwt;

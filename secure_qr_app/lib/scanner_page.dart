@@ -4,9 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:qr_code_scanner_plus/qr_code_scanner_plus.dart';
 import 'package:geolocator/geolocator.dart';
 import 'scan_result_page.dart';
-
-const String apiBase =
-    "https://secureqr-api-bdhnbpffhyctejfc.eastasia-01.azurewebsites.net";
+import 'config.dart';
 
 class ScannerPage extends StatefulWidget {
   final String jwt;
