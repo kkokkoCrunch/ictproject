@@ -7,6 +7,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 import 'attendance_page.dart';
 import 'scans_logs_page.dart';
 import 'login_page.dart';
+import 'config.dart';
 
 const String apiBase =
     "https://secureqr-api-bdhnbpffhyctejfc.eastasia-01.azurewebsites.net";

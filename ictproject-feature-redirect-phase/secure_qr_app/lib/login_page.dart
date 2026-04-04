@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'student_page.dart';
 import 'lecturer_page.dart';
 import 'admin_page.dart';
+import 'config.dart';
 
 const String apiBase =
     "https://secureqr-api-bdhnbpffhyctejfc.eastasia-01.azurewebsites.net";

@@ -3,6 +3,7 @@ import 'package:app_links/app_links.dart';
 import 'dart:async';
 
 import 'login_page.dart';
+import 'config.dart';
 
 void main() {
   runApp(const SecureQrApp());

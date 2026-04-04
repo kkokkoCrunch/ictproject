@@ -4,8 +4,10 @@ import 'package:http/http.dart' as http;
 import 'package:qr_flutter/qr_flutter.dart';
 import 'admin_incidents_page.dart';
 import 'login_page.dart';
+import 'config.dart';
 
-const String apiBase = "https://YOUR-NEW-BACKEND-URL.azurewebsites.net";
+/*const String apiBase =
+    "https://secureqr-api-bdhnbpffhyctejfc.eastasia-01.azurewebsites.net";*/
 
 class AdminPage extends StatefulWidget {
   final String jwt;

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'scanner_page.dart';
 import 'login_page.dart';
+import 'config.dart';
 
 class StudentPage extends StatelessWidget {
   final String jwt;
