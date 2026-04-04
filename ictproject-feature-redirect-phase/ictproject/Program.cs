@@ -12,7 +12,8 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Controllers
 builder.Services.AddControllers();
-//Flutter Login
+
+// Flutter Login / CORS
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFlutter",
@@ -23,12 +24,13 @@ builder.Services.AddCors(options =>
                   .AllowAnyMethod();
         });
 });
-//Database
+
+// SQLite database path
 var dbPath = Path.Combine(builder.Environment.ContentRootPath, "secureqr.db");
 
-// Database (Azure SQL)
+// Database (SQLite)
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("Default")));
+    options.UseSqlite($"Data Source={dbPath}"));
 
 // Swagger
 builder.Services.AddEndpointsApiExplorer();
@@ -53,19 +55,19 @@ builder.Services.AddSwaggerGen(c =>
     c.AddSecurityDefinition("Bearer", securityScheme);
 
     c.AddSecurityRequirement(new OpenApiSecurityRequirement
-{
     {
-        new OpenApiSecurityScheme
         {
-            Reference = new OpenApiReference
+            new OpenApiSecurityScheme
             {
-                Type = ReferenceType.SecurityScheme,
-                Id = "Bearer"
-            }
-        },
-        Array.Empty<string>()
-    }
-});
+                Reference = new OpenApiReference
+                {
+                    Type = ReferenceType.SecurityScheme,
+                    Id = "Bearer"
+                }
+            },
+            Array.Empty<string>()
+        }
+    });
 });
 
 // JWT Authentication stuff
@@ -94,6 +96,7 @@ builder.Services
 builder.Services.AddAuthorization();
 
 var app = builder.Build();
+
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -115,7 +118,6 @@ using (var scope = app.Services.CreateScope())
     }
 }
 
-
 // Swagger UI
 if (app.Environment.IsDevelopment() || app.Environment.IsProduction())
 {
@@ -128,7 +130,6 @@ app.UseStaticFiles();
 app.UseCors("AllowFlutter");
 app.UseAuthentication();
 app.UseAuthorization();
-
 
 app.MapControllers();
 

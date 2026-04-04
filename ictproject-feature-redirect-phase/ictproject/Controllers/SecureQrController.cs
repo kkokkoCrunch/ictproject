@@ -33,7 +33,8 @@ public class SecureQrController : ControllerBase
 
     private static readonly (double Lat, double Lon)[] AllowedLocations =
     {
-        (1.3641, 103.9626)
+        (1.3641, 103.9626),
+        (1.2962985921874264, 103.85327246677576)
     };
 
     public SecureQrController(AppDbContext db)
@@ -157,7 +158,7 @@ public class SecureQrController : ControllerBase
 
         var sig = ComputeHmac(hmacKey!, token);
 
-        var qrUrl = $"{Request.Scheme}://{Request.Host}/qr.html?token={token}&sig={sig}";
+        var qrUrl = $"{Request.Scheme}://{Request.Host}/a/{token}?sig={sig}";
 
         return Ok(new
         {

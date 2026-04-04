@@ -67,9 +67,18 @@ public class AuthController : ControllerBase
     [HttpPost("register")]
     public IActionResult Register([FromBody] RegisterRequest req)
     {
-        // NEW: password length validation
+        if (string.IsNullOrWhiteSpace(req.Username))
+            return BadRequest(new { error = "Username is required" });
+
+        if (string.IsNullOrWhiteSpace(req.Password))
+            return BadRequest(new { error = "Password is required" });
+
         if (req.Password.Length < 8)
             return BadRequest(new { error = "Password must be at least 8 characters long" });
+
+        var allowedRoles = new[] { "Admin", "Lecturer", "Student" };
+        if (!allowedRoles.Contains(req.Role))
+            return BadRequest(new { error = "Invalid role" });
 
         if (_db.Users.Any(u => u.Username == req.Username))
             return BadRequest(new { error = "Username already exists" });
