@@ -33,7 +33,8 @@ public class SecureQrController : ControllerBase
 
     private static readonly (double Lat, double Lon)[] AllowedLocations =
     {
-        (1.3641, 103.9626)
+        (1.3641, 103.9626),
+        (1.3636284887951993, 103.96121929740363)
     };
 
     public SecureQrController(AppDbContext db)

@@ -23,6 +23,8 @@ public class AuthController : ControllerBase
     }
 
     public record LoginRequest(string Username, string Password);
+    public record RegisterRequest(string Username, string Password, string Role);
+    public record UpdateUserRequest(string Password, string Role);
 
     [HttpPost("login")]
     public IActionResult Login([FromBody] LoginRequest req)
@@ -67,9 +69,14 @@ public class AuthController : ControllerBase
     [HttpPost("register")]
     public IActionResult Register([FromBody] RegisterRequest req)
     {
-        // NEW: password length validation
-        if (req.Password.Length < 8)
+        if (string.IsNullOrWhiteSpace(req.Username))
+            return BadRequest(new { error = "Username is required" });
+
+        if (string.IsNullOrWhiteSpace(req.Password) || req.Password.Length < 8)
             return BadRequest(new { error = "Password must be at least 8 characters long" });
+
+        if (string.IsNullOrWhiteSpace(req.Role))
+            return BadRequest(new { error = "Role is required" });
 
         if (_db.Users.Any(u => u.Username == req.Username))
             return BadRequest(new { error = "Username already exists" });
@@ -92,5 +99,73 @@ public class AuthController : ControllerBase
         });
     }
 
-    public record RegisterRequest(string Username, string Password, string Role);
+    [Authorize(Roles = "Admin")]
+    [HttpGet("users")]
+    public IActionResult GetUsers()
+    {
+        var users = _db.Users
+            .Select(u => new
+            {
+                username = u.Username,
+                role = u.Role
+            })
+            .OrderBy(u => u.username)
+            .ToList();
+
+        return Ok(users);
+    }
+
+    [Authorize(Roles = "Admin")]
+    [HttpPut("users/{username}")]
+    public IActionResult UpdateUser(string username, [FromBody] UpdateUserRequest req)
+    {
+        var user = _db.Users.SingleOrDefault(u => u.Username == username);
+
+        if (user == null)
+            return NotFound(new { error = "User not found" });
+
+        if (string.IsNullOrWhiteSpace(req.Role))
+            return BadRequest(new { error = "Role is required" });
+
+        user.Role = req.Role;
+
+        if (!string.IsNullOrWhiteSpace(req.Password))
+        {
+            if (req.Password.Length < 8)
+                return BadRequest(new { error = "Password must be at least 8 characters long" });
+
+            user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(req.Password);
+        }
+
+        _db.SaveChanges();
+
+        return Ok(new
+        {
+            message = "User updated",
+            username = user.Username,
+            role = user.Role
+        });
+    }
+
+    [Authorize(Roles = "Admin")]
+    [HttpDelete("users/{username}")]
+    public IActionResult DeleteUser(string username)
+    {
+        var user = _db.Users.SingleOrDefault(u => u.Username == username);
+
+        if (user == null)
+            return NotFound(new { error = "User not found" });
+
+        if (user.Username.ToLower() == "admin")
+            return BadRequest(new { error = "Default admin cannot be deleted" });
+
+        _db.Users.Remove(user);
+        _db.SaveChanges();
+
+        return Ok(new
+        {
+            message = "User deleted",
+            username = user.Username
+        });
+    }
 }
