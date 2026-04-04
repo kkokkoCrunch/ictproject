@@ -52,13 +52,33 @@ class _ScannerPageState extends State<ScannerPage>
       final code = scanData.code;
       if (code == null) return;
 
-      Uri uri = Uri.parse(code);
+      String token = "";
+      String? sig;
 
-      String token = uri.pathSegments.last;
-      String? sig = uri.queryParameters["sig"];
+      try {
+        final uri = Uri.parse(code);
+
+        sig = uri.queryParameters["sig"];
+
+        if (uri.queryParameters["token"] != null &&
+            uri.queryParameters["token"]!.isNotEmpty) {
+          token = uri.queryParameters["token"]!;
+        } else if (uri.pathSegments.isNotEmpty) {
+          token = uri.pathSegments.last;
+        }
+      } catch (_) {
+        token = code;
+      }
+
+      if (token.isEmpty) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text("Invalid QR format")));
+        resetScanner();
+        return;
+      }
 
       controller.pauseCamera();
-
       checkIn(token, sig);
     });
   }
