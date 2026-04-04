@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:qr_flutter/qr_flutter.dart';
 import 'admin_incidents_page.dart';
+import 'admin_users_page.dart';
 import 'login_page.dart';
 import 'config.dart';
 
@@ -162,6 +163,22 @@ class _AdminPageState extends State<AdminPage> {
               ),
             ),
             const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => AdminUsersPage(jwt: widget.jwt),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.people),
+                label: const Text("Manage Users"),
+              ),
+            ),
+            const SizedBox(height: 12),
             SizedBox(
               width: double.infinity,
               child: OutlinedButton.icon(
