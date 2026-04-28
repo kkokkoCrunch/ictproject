@@ -484,27 +484,198 @@ public class SecureQrController : ControllerBase
     public record ReportIncidentRequest(string Token, string Reason);
 
     [HttpPost("api/security/report")]
-    public IActionResult ReportIncident([FromBody] ReportIncidentRequest req)
+    public async Task<IActionResult> ReportIncident([FromBody] ReportIncidentRequest req)
     {
+        if (string.IsNullOrWhiteSpace(req.Token))
+            return BadRequest(new { error = "Token is required" });
+
+        if (string.IsNullOrWhiteSpace(req.Reason))
+            return BadRequest(new { error = "Reason is required" });
+
         if (req.Reason.Length > 100)
-            return BadRequest();
+            return BadRequest(new { error = "Reason is too long" });
+
         Guid? sessionId = null;
 
         var rec = _db.TokenRecords.FirstOrDefault(t => t.Token == req.Token);
         if (rec is not null)
             sessionId = rec.SessionId;
 
-        _db.SecurityIncidents.Add(new SecurityIncident
+        var incident = new SecurityIncident
         {
             Token = req.Token,
             SessionId = sessionId,
             Reason = req.Reason,
             Ip = HttpContext.Connection.RemoteIpAddress?.ToString(),
-            UserAgent = Request.Headers.UserAgent.ToString()
-        });
+            UserAgent = Request.Headers.UserAgent.ToString(),
+            EmailStatus = "Pending",
+            ExternalSystem = "ServiceNow",
+            ExternalSyncStatus = "Pending"
+        };
+
+        _db.SecurityIncidents.Add(incident);
+        _db.SaveChanges();
+
+        try
+        {
+            await SendIncidentEmailAsync(incident);
+            incident.EmailStatus = "Sent";
+            incident.EmailSentAtUtc = DateTime.UtcNow;
+        }
+        catch (Exception ex)
+        {
+            incident.EmailStatus = "Failed";
+            incident.EmailError = ex.Message;
+        }
+
+        try
+        {
+            await CreateServiceNowIncidentAsync(incident);
+            incident.ExternalSyncStatus = "Synced";
+        }
+        catch (Exception ex)
+        {
+            incident.ExternalSyncStatus = "Failed";
+            incident.ExternalSyncError = ex.Message;
+        }
 
         _db.SaveChanges();
-        return Ok(new { result = "REPORTED" });
+
+        return Ok(new
+        {
+            result = "REPORTED",
+            incidentId = incident.Id,
+            emailStatus = incident.EmailStatus,
+            serviceNowStatus = incident.ExternalSyncStatus,
+            serviceNowTicketNumber = incident.ExternalTicketNumber
+        });
+    }
+
+    // ServiceNow
+
+    private async Task SendIncidentEmailAsync(SecurityIncident incident)
+    {
+        var smtpHost = HttpContext.RequestServices
+            .GetRequiredService<IConfiguration>()["Smtp:Host"];
+
+        var smtpPortText = HttpContext.RequestServices
+            .GetRequiredService<IConfiguration>()["Smtp:Port"];
+
+        var smtpUser = HttpContext.RequestServices
+            .GetRequiredService<IConfiguration>()["Smtp:Username"];
+
+        var smtpPassword = HttpContext.RequestServices
+            .GetRequiredService<IConfiguration>()["Smtp:Password"];
+
+        var from = HttpContext.RequestServices
+            .GetRequiredService<IConfiguration>()["Smtp:From"];
+
+        var to = HttpContext.RequestServices
+            .GetRequiredService<IConfiguration>()["Smtp:To"];
+
+        if (string.IsNullOrWhiteSpace(smtpHost) ||
+            string.IsNullOrWhiteSpace(smtpPortText) ||
+            string.IsNullOrWhiteSpace(from) ||
+            string.IsNullOrWhiteSpace(to))
+        {
+            throw new Exception("SMTP settings are missing");
+        }
+
+        using var client = new System.Net.Mail.SmtpClient(smtpHost, int.Parse(smtpPortText))
+        {
+            EnableSsl = true,
+            Credentials = new System.Net.NetworkCredential(smtpUser, smtpPassword)
+        };
+
+        var body = $@"
+Suspicious QR incident reported.
+
+Incident ID: {incident.Id}
+Reason: {incident.Reason}
+Token: {incident.Token}
+Session ID: {incident.SessionId}
+Reported At UTC: {incident.ReportedAtUtc}
+IP: {incident.Ip}
+User Agent: {incident.UserAgent}
+";
+
+        var mail = new System.Net.Mail.MailMessage(
+            from,
+            to,
+            "[SecureQR] Suspicious QR Incident Reported",
+            body
+        );
+
+        await client.SendMailAsync(mail);
+    }
+
+    private async Task CreateServiceNowIncidentAsync(SecurityIncident incident)
+    {
+        var instanceUrl = HttpContext.RequestServices
+            .GetRequiredService<IConfiguration>()["ServiceNow:InstanceUrl"];
+
+        var username = HttpContext.RequestServices
+            .GetRequiredService<IConfiguration>()["ServiceNow:Username"];
+
+        var password = HttpContext.RequestServices
+            .GetRequiredService<IConfiguration>()["ServiceNow:Password"];
+
+        if (string.IsNullOrWhiteSpace(instanceUrl) ||
+            string.IsNullOrWhiteSpace(username) ||
+            string.IsNullOrWhiteSpace(password))
+        {
+            throw new Exception("ServiceNow settings are missing");
+        }
+
+        using var client = new HttpClient();
+
+        var authBytes = Encoding.ASCII.GetBytes($"{username}:{password}");
+        client.DefaultRequestHeaders.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue(
+                "Basic",
+                Convert.ToBase64String(authBytes)
+            );
+
+        client.DefaultRequestHeaders.Accept.Add(
+            new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json")
+        );
+
+        var payload = new
+        {
+            short_description = "Suspicious QR incident reported",
+            description =
+                $"SecureQR suspicious QR incident\n\n" +
+                $"Incident ID: {incident.Id}\n" +
+                $"Reason: {incident.Reason}\n" +
+                $"Token: {incident.Token}\n" +
+                $"Session ID: {incident.SessionId}\n" +
+                $"Reported At UTC: {incident.ReportedAtUtc}\n" +
+                $"IP: {incident.Ip}\n" +
+                $"User Agent: {incident.UserAgent}",
+            category = "security",
+            urgency = "2",
+            impact = "2"
+        };
+
+        var json = System.Text.Json.JsonSerializer.Serialize(payload);
+        var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+        var url = $"{instanceUrl.TrimEnd('/')}/api/now/table/incident";
+        var response = await client.PostAsync(url, content);
+
+        var responseBody = await response.Content.ReadAsStringAsync();
+
+        if (!response.IsSuccessStatusCode)
+            throw new Exception($"ServiceNow failed: {response.StatusCode} {responseBody}");
+
+        using var doc = System.Text.Json.JsonDocument.Parse(responseBody);
+
+        var result = doc.RootElement.GetProperty("result");
+
+        incident.ExternalTicketId = result.GetProperty("sys_id").GetString();
+
+        if (result.TryGetProperty("number", out var number))
+            incident.ExternalTicketNumber = number.GetString();
     }
 
     //admin view for incidents
@@ -617,10 +788,20 @@ public class SecureQrController : ControllerBase
         public Guid Id { get; set; } = Guid.NewGuid();
         public string Token { get; set; } = "";
         public Guid? SessionId { get; set; }
-        public string Reason { get; set; } = ""; // EXPIRED, UNKNOWN, OUTSIDE_WINDOW
+        public string Reason { get; set; } = "";
         public DateTime ReportedAtUtc { get; set; } = DateTime.UtcNow;
         public string? Ip { get; set; }
         public string? UserAgent { get; set; }
+
+        public string EmailStatus { get; set; } = "Pending";
+        public DateTime? EmailSentAtUtc { get; set; }
+        public string? EmailError { get; set; }
+
+        public string ExternalSystem { get; set; } = "ServiceNow";
+        public string ExternalSyncStatus { get; set; } = "Pending";
+        public string? ExternalTicketId { get; set; }
+        public string? ExternalTicketNumber { get; set; }
+        public string? ExternalSyncError { get; set; }
     }
 
     //Admin view data endpoints
